@@ -1,10 +1,9 @@
-var vm = (function () {
+(function () {
+
   /**
-   * tag { String }
-   * attr { Object }
-   * children { Array }
-   * text { String }
+   * make data reactive
    */
+
   function vnode (tag, attr, children, text) {
     this.tag = tag;
     this.attr = attr;
@@ -55,6 +54,7 @@ var vm = (function () {
     if (type === 'text') {
       var watcher = {
         update: function () {
+          console.log('update text');
           node.textContent = vm.$data[exp]
         }
       }
@@ -76,6 +76,7 @@ var vm = (function () {
       set: function (newVal) {
         if (newVal === val) return;
         val = newVal;
+        console.log('emit change');
         dep.notify();
       }
     })
@@ -122,11 +123,11 @@ var vm = (function () {
   var vm = new Vue({
     el: '#app',
     data: {
-      name: 'hello world'
+      name: ''
     },
     render: function () {
       return h('div',
-        { class: 'wrap' },
+        { class: 'wrapper' },
         [
           h('p',
             { class: 'inner', 'v-text': 'name' }
@@ -136,6 +137,14 @@ var vm = (function () {
     }
   })
 
-  return vm
+  // test
+  var arr = 'hello world'.split('');
+  var id = setInterval(function () {
+    if (arr.length === 0) {
+      clearInterval(id);
+      return;
+    }
+    vm.$data.name += arr.shift();
+  }, 500)
 
 })();
