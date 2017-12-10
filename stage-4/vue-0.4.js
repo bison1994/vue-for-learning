@@ -1,91 +1,41 @@
-(function () {
+/**
+ * make data reactive
+ * when data changes, the `update` method will be invoked automatically and thus updates the DOM
+ * @Tips
+ * some code may be useless but helpful for understanding
+ * some code is incompleted and heavily simplified but also for better understanding
+ */
 
-  /**
-   * make data reactive
-   */
-
-  function vnode (tag, attr, children, text) {
-    this.tag = tag;
-    this.attr = attr;
-    this.children = children;
-    this.text = text;
-  }
-
-  function createElm (vm, vnode) {
-    var $el;
-    var tag = vnode.tag;
-    var text = vnode.text;
-    if (tag) {
-      $el = document.createElement(tag)
-    } else if (typeof text === 'string') {
-      return document.createTextNode(text)
-    }
-
-    var attr = vnode.attr;
-    if (attr) {
-      for (var key in attr) {
-        if (isDirective(key)) {
-          handleDirective(vm, key.slice(2), attr[key], $el)
-          continue
-        }
-        $el.setAttribute(key, attr[key])
-      }
-    }
-
-    var children = vnode.children;
-    if (children) {
-      for (var i = 0; i < children.length; i++) {
-        var child = createElm(vm, children[i]);
-        $el.appendChild(child)
-      }
-    }
-    return $el
-  }
-
-  function isDirective (key) {
-    return key.indexOf('v-') > -1
-  }
-
-  function handleDirective (vm, type, exp, node) {
-    if (type === 'text') {
-      var watcher = {
-        update: function () {
-          console.log('update text');
-          node.textContent = vm.$data[exp]
-        }
-      }
-    }
-    Dep.target = watcher;
-    watcher.update();
-    Dep.target = null;
-  }
+;(function () {
 
   function defineReactive (obj, key, val) {
     var dep = new Dep();
     Object.defineProperty(obj, key, {
       get: function () {
         if (Dep.target) {
-          dep.addSub(Dep.target)
+          Dep.target.addDep(dep);
         }
         return val
       },
       set: function (newVal) {
         if (newVal === val) return;
         val = newVal;
-        console.log('emit change');
         dep.notify();
       }
     })
   }
 
-  function initState (obj) {
+  function observe (obj) {
     for (var key in obj) {
       defineReactive(obj, key, obj[key])
     }
   }
 
+  var uid$1 = 0;
+
   function Dep () {
     this.subs = [];
+    this.id = uid$1++;
   }
 
   Dep.target = null;
@@ -101,38 +51,236 @@
     }
   }
 
+  function Watcher (vm, expOrFn, cb) {
+    this.vm = vm;
+    this.getter = expOrFn;
+    this.cb = cb;
+    this.depIds = [];
+    this.value = this.get();
+  }
+
+  Watcher.prototype.get = function () {
+    Dep.target = this; /* ! */
+    var value = this.getter.call(this.vm);
+    Dep.target = null;
+    return value
+  }
+
+  Watcher.prototype.update = function () {
+    var value = this.get();
+    if (this.value !== value) {
+      var oldValue = this.value;
+      this.value = value;
+      this.cb.call(this.vm, value, oldValue);
+    }
+  }
+
+  Watcher.prototype.addDep = function (dep) {
+    var id = dep.id;
+    // to avoid depending the watcher to the same dep more than once
+    if (this.depIds.indexOf(id) === -1) {
+      this.depIds.push(id);
+      dep.addSub(this);
+    }
+  }
+
+  function vnode (tag, data, children, text, elm) {
+    this.tag = tag;
+    this.data = data;
+    this.children = children;
+    this.text = text;
+    this.elm = elm;
+  }
+
+  function normalizeChildren (children) {
+    if (typeof children === 'string') {
+      return [createTextVNode(children)]
+    }
+    return children
+  }
+
+  function createTextVNode (val) {
+    return new vnode(undefined, undefined, undefined, String(val))
+  }
+
+  function createElement (tag, data, children) {
+    return new vnode(tag, data, normalizeChildren(children), undefined, undefined);
+  }
+
+  function createElm (vnode) {
+    var tag = vnode.tag;
+    var data = vnode.data;
+    var children = vnode.children;
+
+    if (tag !== undefined) {
+      vnode.elm = document.createElement(tag);
+
+      if (data.attrs !== undefined) {
+        var attrs = data.attrs;
+        for (var key in attrs) {
+          vnode.elm.setAttribute(key, attrs[key])
+        }
+      }
+
+      if (children) {
+        createChildren(vnode, children)
+      }
+    } else {
+      vnode.elm = document.createTextNode(vnode.text);
+    }
+
+    return vnode.elm;
+  }
+
+  function createChildren (vnode, children) {
+    for (var i = 0; i < children.length; ++i) {
+      vnode.elm.appendChild(createElm(children[i]));
+    }
+  }
+
+  function sameVnode (vnode1, vnode2) {
+    return vnode1.tag === vnode2.tag
+  }
+
+  function emptyNodeAt (elm) {
+    return new vnode(elm.tagName.toLowerCase(), {}, [], undefined, elm)
+  }
+
+  function patchVnode (oldVnode, vnode) {
+    var elm = vnode.elm = oldVnode.elm;
+    var oldCh = oldVnode.children;
+    var ch = vnode.children;
+
+    if (!vnode.text) {
+      if (oldCh && ch) {
+        updateChildren(oldCh, ch);
+      }
+    } else if (oldVnode.text !== vnode.text) {
+      elm.textContent = vnode.text;
+    }
+  }
+
+  function updateChildren (oldCh, newCh) {
+    // assume that every element node has only one child to simplify our diff algorithm
+    if (sameVnode(oldCh[0], newCh[0])) {
+      patchVnode(oldCh[0], newCh[0])
+    } else {
+      patch(oldCh[0], newCh[0])
+    }
+  }
+
+  function patch (oldVnode, vnode) {
+    var isRealElement = oldVnode.nodeType !== undefined; // virtual node has no `nodeType` property
+    if (!isRealElement && sameVnode(oldVnode, vnode)) {
+      patchVnode(oldVnode, vnode);
+    } else {
+      if (isRealElement) {
+        oldVnode = emptyNodeAt(oldVnode);
+      }
+      var elm = oldVnode.elm;
+      var parent = elm.parentNode;
+
+      createElm(vnode);
+
+      parent.insertBefore(vnode.elm, elm);
+      parent.removeChild(elm);
+    }
+
+    return vnode.elm
+  }
+
+  function initData (vm) {
+    var data = vm.$data = vm.$options.data;
+    var keys = Object.keys(data);
+    var i = keys.length
+    // proxy data so you can use `this.key` directly other than `this.$data.key`
+    while (i--) {
+      proxy(vm, keys[i])
+    }
+
+    observe(data)
+  }
+
+  function proxy (vm, key) {
+    Object.defineProperty(vm, key, {
+      configurable: true,
+      enumerable: true,
+      get: function () {
+        return vm.$data[key]
+      },
+      set: function (val) {
+        vm.$data[key] = val
+      }
+    })
+  }
+
   function Vue (options) {
-    this.$el = document.querySelector(options.el);
-    this.$data = options.data;
-    initState(this.$data);
-
-    var app = options.render.call(this, this.h);
-    var dom = createElm(this, app)
-    this.mount(dom)
+    var vm = this;
+    vm.$options = options;
+    
+    initData(vm);
+    vm.mount(document.querySelector(options.el))
   }
 
-  Vue.prototype.mount = function (dom) {
-    this.$el.appendChild(dom)
+  Vue.prototype.mount = function (el) {
+    var vm = this;
+    vm.$el = el;
+    new Watcher(vm, function () {
+      vm.update(vm.render());
+    });
   }
 
-  Vue.prototype.h = function createElement (tag, attr, children, text) {
-    return new vnode(tag, attr, children, text);
+  Vue.prototype.update = function (vnode) {
+    var vm = this;
+    var prevVnode = vm._vnode;
+    vm._vnode = vnode;
+    if (!prevVnode) {
+      vm.$el = vm.patch(vm.$el, vnode);
+    } else {
+      vm.$el = vm.patch(prevVnode, vnode);
+    }
+  }
+
+  Vue.prototype.patch = patch;
+
+  Vue.prototype.render = function () {
+    var vm = this;
+    return vm.$options.render.call(vm)
   }
 
   var vm = new Vue({
     el: '#app',
     data: {
-      name: ''
+      message: 'Hello world',
+      isShow: true
     },
-    render: function (h) {
-      return h('div',
-        { class: 'wrapper' },
+    render () {
+      return createElement(
+        'div',
+        {
+          attrs: {
+            'class': 'wrapper'
+          }
+        },
         [
-          h('p',
-            { class: 'inner' },
-            [
-              h(undefined, undefined, undefined, this.$data.name)
-            ]
+          this.isShow
+          ? createElement(
+            'p',
+            { 
+              attrs: {
+                'class': 'inner'
+              }
+            },
+            this.message
+          )
+          : createElement(
+            'h1',
+            { 
+              attrs: {
+                'class': 'inner'
+              }
+            },
+            'Hello world'
           )
         ]
       )
@@ -140,13 +288,12 @@
   })
 
   // test
-  var arr = 'hello world'.split('');
-  var id = setInterval(function () {
-    if (arr.length === 0) {
-      clearInterval(id);
-      return;
-    }
-    vm.$data.name += arr.shift();
-  }, 500)
+  setTimeout(function () {
+    vm.message = 'Hello';
+  }, 1000)
+
+  setTimeout(function () {
+    vm.isShow = false;
+  }, 2000)
 
 })();

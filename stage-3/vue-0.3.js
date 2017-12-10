@@ -1,5 +1,5 @@
 /**
- * make some change to the data
+ * make some change to the data and rerender the virtual dom
  * then diff the previous vnode tree and the current vnode tree
  * finally patch those diffs to the real dom
  */
