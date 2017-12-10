@@ -1,80 +1,131 @@
 /**
- * apply virtual dom to real dom in Vue
+ * apply virtual dom to real dom
  */
 
 ;(function () {
-  /**
-   * tag { String }
-   * attr { Object }
-   * children { Array } real dom nodes
-   * text { String }
-   */
-  function vnode (tag, attr, children, text) {
+
+  function vnode (tag, data, children, text, elm) {
     this.tag = tag;
-    this.attr = attr;
+    this.data = data;
     this.children = children;
     this.text = text;
+    this.elm = elm;
   }
 
-  function h (tag, attr, children, text) {
-    return new vnode(tag, attr, children, text);
+  function normalizeChildren (children) {
+    if (typeof children === 'string') {
+      return [createTextVNode(children)]
+    }
+    return children
   }
 
-  function createElement (vnode) {
-    var el;
+  function createTextVNode (val) {
+    return new vnode(undefined, undefined, undefined, String(val))
+  }
+
+  function createElement (tag, data, children) {
+    return new vnode(tag, data, normalizeChildren(children), undefined, undefined);
+  }
+
+  function createElm (vnode) {
     var tag = vnode.tag;
-    var text = vnode.text;
-    var attr = vnode.attr;
+    var data = vnode.data;
     var children = vnode.children;
-    
-    if (tag) {
-      el = document.createElement(tag)
-    } else if (typeof text === 'string') {
-      return document.createTextNode(text)
-    }
 
-    if (attr) {
-      for (var key in attr) {
-        el.setAttribute(key, attr[key])
+    if (tag !== undefined) {
+      vnode.elm = document.createElement(tag);
+
+      if (data.attrs !== undefined) {
+        var attrs = data.attrs;
+        for (var key in attrs) {
+          vnode.elm.setAttribute(key, attrs[key])
+        }
       }
-    }
 
-    if (children) {
-      for (var i = 0; i < children.length; i++) {
-        var child = createElement(children[i]);
-        el.appendChild(child)
+      if (children) {
+        createChildren(vnode, children)
       }
+    } else {
+      vnode.elm = document.createTextNode(vnode.text);
     }
 
-    return el
+    return vnode.elm;
+  }
+
+  function createChildren (vnode, children) {
+    for (var i = 0; i < children.length; ++i) {
+      vnode.elm.appendChild(createElm(children[i]));
+    }
+  }
+
+  function initData (vm) {
+    var data = vm.$data = vm.$options.data;
+    var keys = Object.keys(data);
+    var i = keys.length
+    // proxy data so you can use `this.key` directly other than `this.$data.key`
+    while (i--) {
+      var key = keys[i];
+      Object.defineProperty(vm, key, {
+        configurable: true,
+        enumerable: true,
+        get: function () {
+          return vm.$data[key]
+        },
+        set: function (val) {
+          vm.$data[key] = val
+        }
+      })
+    }
   }
 
   function Vue (options) {
-    this.$el = document.querySelector(options.el);
-    this.$data = options.data;
-    this._vnode = options.render.call(this);
-    var app = createElement(this._vnode);
-    this.mount(app)
+    this.$options = options;
+    
+    initData(this);
+    this.mount(document.querySelector(options.el))
   }
 
-  Vue.prototype.mount = function (dom) {
-    this.$el.appendChild(dom)
+  Vue.prototype.mount = function (el) {
+    this.$el = el;
+    var vnode = this.$options.render.call(this)
+    this.patch(this.$el, vnode)
+  }
+
+  Vue.prototype.patch = function (oldVnode, vnode) {
+    var isRealElement = oldVnode.nodeType !== undefined; // virtual node has no `nodeType` property
+
+    if (isRealElement) {
+      createElm(vnode);
+      var parent = oldVnode.parentNode;
+      parent.insertBefore(vnode.elm, oldVnode);
+      parent.removeChild(oldVnode);
+    }
+
+    return vnode.elm
   }
 
   new Vue({
     el: '#app',
     data: {
-      name: 'hello world'
+      message: 'Hello world'
     },
-    render: function () {
-      return h('div',
-        { class: 'wrapper' },
+    render () {
+      return createElement(
+        'div',
+        {
+          attrs: {
+            'class': 'wrapper'
+          }
+        },
         [
-          h('p',
-            { class: 'inner' },
-            [
-              h(undefined, undefined, undefined, this.$data.name)
-            ]
+          createElement(
+            'p',
+            { 
+              attrs: {
+                'class': 'inner'
+              }
+            },
+            this.message
           )
         ]
       )

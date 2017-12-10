@@ -11,36 +11,32 @@
     this.text = text;
   }
 
-  function h (tag, attr, children, text) {
-    var node = new vnode(tag, attr, children, text);
-    return createElement(this, node);
-  }
-
-  function createElement (vm, vnode) {
+  function createElm (vm, vnode) {
     var $el;
     var tag = vnode.tag;
     var text = vnode.text;
     if (tag) {
       $el = document.createElement(tag)
-    } else if (text) {
+    } else if (typeof text === 'string') {
       return document.createTextNode(text)
     }
 
-    var $attr = vnode.attr;
-    if ($attr) {
-      for (var key in $attr) {
+    var attr = vnode.attr;
+    if (attr) {
+      for (var key in attr) {
         if (isDirective(key)) {
-          handleDirective(vm, key.slice(2), $attr[key], $el)
+          handleDirective(vm, key.slice(2), attr[key], $el)
           continue
         }
-        $el.setAttribute(key, $attr[key])
+        $el.setAttribute(key, attr[key])
       }
     }
 
-    var $children = vnode.children;
-    if ($children) {
-      for (var i = 0; i < $children.length; i++) {
-        $el.appendChild($children[i])
+    var children = vnode.children;
+    if (children) {
+      for (var i = 0; i < children.length; i++) {
+        var child = createElm(vm, children[i]);
+        $el.appendChild(child)
       }
     }
     return $el
@@ -110,14 +106,17 @@
     this.$data = options.data;
     initState(this.$data);
 
-    h = h.bind(this);
-
-    var app = options.render.call(this);
-    this.mount(app)
+    var app = options.render.call(this, this.h);
+    var dom = createElm(this, app)
+    this.mount(dom)
   }
 
   Vue.prototype.mount = function (dom) {
     this.$el.appendChild(dom)
+  }
+
+  Vue.prototype.h = function createElement (tag, attr, children, text) {
+    return new vnode(tag, attr, children, text);
   }
 
   var vm = new Vue({
@@ -125,12 +124,15 @@
     data: {
       name: ''
     },
-    render: function () {
+    render: function (h) {
       return h('div',
         { class: 'wrapper' },
         [
           h('p',
-            { class: 'inner', 'v-text': 'name' }
+            { class: 'inner' },
+            [
+              h(undefined, undefined, undefined, this.$data.name)
+            ]
           )
         ]
       )

@@ -1,70 +1,90 @@
 /**
- * apply virtual dom to real dom
+ * mount virtual dom to real dom
  */
 
 ;(function () {
-  /**
-   * tag { String }
-   * attr { Object }
-   * children { Array }
-   * text { String }
-   */
-  function vnode (tag, attr, children, text) {
+
+  function vnode (tag, data, children, text) {
     this.tag = tag;
-    this.attr = attr;
+    this.data = data;
     this.children = children;
     this.text = text;
   }
 
-  function h (tag, attr, children, text) {
-    return new vnode(tag, attr, children, text);
-  }
-
-  function createElement (vnode) {
-    var el;
+  function createElm (vnode) {
     var tag = vnode.tag;
-    var text = vnode.text;
-    var attr = vnode.attr;
+    var data = vnode.data;
     var children = vnode.children;
-    
-    if (tag) {
-      el = document.createElement(tag)
-    } else if (typeof text === 'string') {
-      return document.createTextNode(text)
+
+    if (tag !== undefined) {
+      vnode.elm = document.createElement(tag);
+
+      if (data.attrs !== undefined) {
+        var attrs = data.attrs;
+        for (var key in attrs) {
+          vnode.elm.setAttribute(key, attrs[key])
+        }
+      }
+      if (children) {
+        createChildren(vnode, children)
+      }
+    } else {
+      vnode.elm = document.createTextNode(vnode.text);
     }
 
-    if (attr) {
-      for (var key in attr) {
-        el.setAttribute(key, attr[key])
+    return vnode.elm;
+  }
+
+  function createChildren (vnode, children) {
+    for (var i = 0; i < children.length; ++i) {
+      vnode.elm.appendChild(createElm(children[i]));
+    }
+  }
+
+  function patch (oldVnode, vnode) {
+
+    createElm(vnode)
+
+    var isRealElement = oldVnode.nodeType !== undefined ; // virtual node has no `nodeType` property
+    if (isRealElement) {
+      var parent = oldVnode.parentNode;
+      if (parent) {
+        parent.insertBefore(vnode.elm, oldVnode);
+        parent.removeChild(oldVnode);
       }
     }
 
-    if (children) {
-      for (var i = 0; i < children.length; i++) {
-        var child = createElement(children[i]);
-        el.appendChild(child)
-      }
-    }
-
-    return el
+    return vnode.elm
   }
 
-  function mount (selector, dom) {
-    document.querySelector(selector).appendChild(dom)
+  function render () {
+    return new vnode(
+      'div',
+      {
+        attrs: {
+          'class': 'wrapper'
+        }
+      },
+      [
+        new vnode(
+          'p',
+          { 
+            attrs: {
+              'class': 'inner'
+            }
+          },
+          [new vnode(undefined, undefined, undefined, 'Hello world')]
+        )
+      ]
+    )
   }
 
-  var app = h('div',
-              { class: 'wrapper' },
-              [
-                h('p',
-                  { class: 'inner' },
-                  [
-                    h(undefined, undefined, undefined, 'hello world')
-                  ]
-                )
-              ]
-            )
+  function mount (el) {
+    this.$el = el;
+    var vnode = render();
+    patch(this.$el, vnode)
+  }
 
-  mount('#app', createElement(app))
+  mount(document.querySelector("#app"))
 
 })();
