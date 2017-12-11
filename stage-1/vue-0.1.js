@@ -80,9 +80,8 @@
   }
 
   function mount (el) {
-    this.$el = el;
     var vnode = render();
-    patch(this.$el, vnode)
+    patch(el, vnode)
   }
 
   mount(document.querySelector("#app"))
