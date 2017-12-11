@@ -64,18 +64,21 @@
     var i = keys.length
     // proxy data so you can use `this.key` directly other than `this.$data.key`
     while (i--) {
-      var key = keys[i];
-      Object.defineProperty(vm, key, {
-        configurable: true,
-        enumerable: true,
-        get: function () {
-          return vm.$data[key]
-        },
-        set: function (val) {
-          vm.$data[key] = val
-        }
-      })
+      proxy(vm, keys[i])
     }
+  }
+
+  function proxy (vm, key) {
+    Object.defineProperty(vm, key, {
+      configurable: true,
+      enumerable: true,
+      get: function () {
+        return vm.$data[key]
+      },
+      set: function (val) {
+        vm.$data[key] = val
+      }
+    })
   }
 
   function Vue (options) {
