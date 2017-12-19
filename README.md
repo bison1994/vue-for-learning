@@ -4,7 +4,7 @@ Learning vue.js source code progressively and effectively
 
 ### what you will get
 
-Totally understand how does vue actrually work with minimum cost
+Totally understand how does vue actually work with minimum cost
 
 ### stage-1
 
@@ -33,7 +33,3 @@ Totally understand how does vue actrually work with minimum cost
 - make the data reactive so that rerender will excute automatically
 
 > learn `Dep`, `Watcher`, `Getter`, `Setter`, `Subscribe/Publish`
-
-### stage-5
-
-- ...
